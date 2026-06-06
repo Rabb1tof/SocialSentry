@@ -28,7 +28,7 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
   return (
     <div className="flex min-h-screen overflow-hidden">
       {/* Brand panel */}
-      <div className="relative hidden flex-[1.1] flex-col justify-between overflow-hidden border-r p-10 lg:flex bg-[linear-gradient(157deg,#EAF0FF_0%,#F6F8FC_70%)] dark:border-transparent dark:bg-[#070A12]">
+      <div className="relative hidden flex-[1.1] flex-col justify-between overflow-hidden border-r p-10 lg:flex bg-[linear-gradient(157deg,#EAF0FF_0%,#F6F8FC_70%)] dark:border-transparent dark:bg-[linear-gradient(157deg,#0B1120_0%,#070A12_70%)]">
         {/* Restrained ambient: one soft azure wash + a faint, theme-aware dot grid.
             (Replaces the old azure+magenta blur-blob mesh.) */}
         <div
