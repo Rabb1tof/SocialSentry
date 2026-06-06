@@ -27,6 +27,7 @@ x-backend-env: &backend-env
   META_WEBHOOK_APP_SECRET: ${META_WEBHOOK_APP_SECRET:-}
   META_WEBHOOK_VERIFY_TOKEN: ${META_WEBHOOK_VERIFY_TOKEN:-}
   META_CALLBACK_URL: ${META_CALLBACK_URL:-}
+  META_WEBHOOK_DEBUG_SECRETS: ${META_WEBHOOK_DEBUG_SECRETS:-}
   VK_API_VERSION: ${VK_API_VERSION:-5.199}
   PORT: "8080"
   ENVIRONMENT: production
@@ -68,7 +69,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    restart: "no"
+    # Retry on failure: on a stack recreate the Docker DNS can briefly fail to
+    # resolve `postgres` ("no such host"); goose exits non-zero, so let it retry
+    # until the DB is reachable, then it runs `up` (idempotent) and exits 0.
+    restart: on-failure
 
   api:
     image: ghcr.io/rabb1tof/socialsentry/api:${VERSION:-latest}

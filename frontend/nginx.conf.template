@@ -1,13 +1,21 @@
 # Production nginx config for the SocialSentry SPA.
 #
 # Rendered at container start by the nginx image's envsubst step
-# (/docker-entrypoint.d/20-envsubst-on-templates.sh) — only ${API_UPSTREAM} is an
-# environment variable, so nginx's own $uri/$host/$scheme/... are left untouched.
+# (/docker-entrypoint.d/20-envsubst-on-templates.sh). Substituted variable:
+#   ${API_UPSTREAM}  - the api service host:port (e.g. api:8080)
+# nginx's own runtime vars ($uri/$host/$upstream/...) are NOT env vars, so envsubst
+# leaves them untouched.
 #
 # Single-origin design: this server serves the built SPA and reverse-proxies the
-# API, webhooks and WebSocket to the internal `api` service. The frontend calls the
+# API, webhooks and WebSocket to the internal api service. The frontend calls the
 # API at the relative path /api/v1 and relies on a SameSite=Strict refresh cookie,
 # so everything MUST be served from one origin.
+#
+# Why resolver + a variable upstream: with a literal `proxy_pass http://api:8080;`
+# nginx resolves `api` once, at startup, and REFUSES TO START if it isn't
+# resolvable yet ("host not found in upstream"). Using the Docker resolver plus a
+# variable makes nginx start regardless and resolve api lazily per request, so a
+# restarting/late api never takes the frontend down.
 
 server {
     listen 80;
@@ -15,9 +23,10 @@ server {
 
     root /usr/share/nginx/html;
     index index.html;
-
-    # Don't let proxied upstream errors expose nginx version.
     server_tokens off;
+
+    # Docker's embedded DNS (always 127.0.0.11 on a user-defined/compose network).
+    resolver 127.0.0.11 valid=10s ipv6=off;
 
     # SPA client-side routing — unknown paths fall back to index.html.
     location / {
@@ -26,7 +35,8 @@ server {
 
     # REST API → backend.
     location /api/ {
-        proxy_pass http://${API_UPSTREAM};
+        set $upstream ${API_UPSTREAM};
+        proxy_pass http://$upstream;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
@@ -35,7 +45,8 @@ server {
 
     # Meta (Instagram) webhooks → backend. Meta posts to /webhooks/instagram.
     location /webhooks {
-        proxy_pass http://${API_UPSTREAM};
+        set $upstream ${API_UPSTREAM};
+        proxy_pass http://$upstream;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
@@ -44,7 +55,8 @@ server {
 
     # Realtime WebSocket → backend (connection upgrade).
     location /ws {
-        proxy_pass http://${API_UPSTREAM};
+        set $upstream ${API_UPSTREAM};
+        proxy_pass http://$upstream;
         proxy_http_version 1.1;
         proxy_set_header Upgrade    $http_upgrade;
         proxy_set_header Connection "upgrade";
