@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/rabb1tof/socialsentry/backend/internal/db/generated"
 	"github.com/rabb1tof/socialsentry/backend/internal/domain"
 )

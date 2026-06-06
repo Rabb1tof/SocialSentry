@@ -106,11 +106,10 @@ jobs:
           go -C backend build -o /tmp/worker ./cmd/worker
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
           version: latest
           working-directory: backend
-          args: --timeout=5m
 
   frontend:
     name: Frontend

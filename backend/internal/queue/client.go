@@ -67,7 +67,9 @@ func parseRedisURL(rawURL string) (asynq.RedisClientOpt, error) {
 		opt.Password = pwd
 	}
 	if db := strings.TrimPrefix(u.Path, "/"); db != "" {
-		fmt.Sscanf(db, "%d", &opt.DB)
+		if _, err := fmt.Sscanf(db, "%d", &opt.DB); err != nil {
+			return asynq.RedisClientOpt{}, fmt.Errorf("queue.parseRedisURL: invalid db %q: %w", db, err)
+		}
 	}
 	return opt, nil
 }

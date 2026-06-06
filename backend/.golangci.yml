@@ -1,54 +1,62 @@
-# golangci-lint config for the SocialSentry backend.
-# Run from backend/: `golangci-lint run ./...`
-#
-# Linter set is intentionally lean — we focus on real bugs (govet, ineffassign,
-# unused) and obvious smells (errcheck, staticcheck). Style-only linters are off
-# because gofmt + a code review are the right place for that.
-
+version: "2"
 run:
-  timeout: 5m
   tests: true
-
 linters:
-  disable-all: true
+  default: none
   enable:
-    - errcheck      # unchecked error returns
-    - gofmt         # formatting (CI gate; matches the gofmt -l check)
-    - goimports     # import grouping + missing imports
-    - govet         # the vet suite
-    - ineffassign   # ineffectual assignments
-    - misspell      # common typos in comments
-    - revive        # configurable replacement for golint
-    - staticcheck   # the staticcheck suite (replaces deprecated megacheck)
-    - unused        # dead code / unused identifiers
-
-linters-settings:
-  goimports:
-    local-prefixes: github.com/rabb1tof/socialsentry/backend
-  revive:
+    - errcheck
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - unused
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: var-naming
+        - name: package-comments
+        - name: indent-error-flow
+        - name: errorf
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: exported
-        disabled: true     # we already document exported symbols; revive's heuristics are noisy
-      - name: var-naming
-      - name: package-comments
-      - name: indent-error-flow
-      - name: errorf
-
+      - linters:
+          - errcheck
+          - revive
+          - staticcheck
+          - unused
+        path: internal/db/generated/
+      - linters:
+          - errcheck
+          - revive
+        path: _test\.go$
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  exclude-rules:
-    # Generated sqlc code is allowed to drift from our style.
-    - path: internal/db/generated/
-      linters:
-        - errcheck
-        - revive
-        - staticcheck
-        - unused
-        - gofmt
-        - goimports
-    # Tests are allowed to use any/interface{} freely and skip a few error checks.
-    - path: _test\.go$
-      linters:
-        - errcheck
-        - revive
-  max-same-issues: 0    # report every occurrence
   max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/rabb1tof/socialsentry/backend
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+      - internal/db/generated/
