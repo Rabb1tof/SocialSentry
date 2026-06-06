@@ -30,6 +30,9 @@ jobs:
           - image: worker
             context: ./backend
             target: production-worker
+          - image: migrate
+            context: ./backend
+            target: migrate
           - image: frontend
             context: ./frontend
             target: production
@@ -100,5 +103,6 @@ jobs:
             ```
             docker pull ${{ env.REGISTRY }}/${{ steps.vars.outputs.repo_lc }}/api:${{ steps.vars.outputs.version }}
             docker pull ${{ env.REGISTRY }}/${{ steps.vars.outputs.repo_lc }}/worker:${{ steps.vars.outputs.version }}
+            docker pull ${{ env.REGISTRY }}/${{ steps.vars.outputs.repo_lc }}/migrate:${{ steps.vars.outputs.version }}
             docker pull ${{ env.REGISTRY }}/${{ steps.vars.outputs.repo_lc }}/frontend:${{ steps.vars.outputs.version }}
             ```

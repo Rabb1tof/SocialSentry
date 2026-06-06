@@ -1,0 +1,54 @@
+# Production nginx config for the SocialSentry SPA.
+#
+# Rendered at container start by the nginx image's envsubst step
+# (/docker-entrypoint.d/20-envsubst-on-templates.sh) — only ${API_UPSTREAM} is an
+# environment variable, so nginx's own $uri/$host/$scheme/... are left untouched.
+#
+# Single-origin design: this server serves the built SPA and reverse-proxies the
+# API, webhooks and WebSocket to the internal `api` service. The frontend calls the
+# API at the relative path /api/v1 and relies on a SameSite=Strict refresh cookie,
+# so everything MUST be served from one origin.
+
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Don't let proxied upstream errors expose nginx version.
+    server_tokens off;
+
+    # SPA client-side routing — unknown paths fall back to index.html.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # REST API → backend.
+    location /api/ {
+        proxy_pass http://${API_UPSTREAM};
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Meta (Instagram) webhooks → backend. Meta posts to /webhooks/instagram.
+    location /webhooks {
+        proxy_pass http://${API_UPSTREAM};
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Realtime WebSocket → backend (connection upgrade).
+    location /ws {
+        proxy_pass http://${API_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host       $host;
+        proxy_read_timeout 3600s;
+    }
+}

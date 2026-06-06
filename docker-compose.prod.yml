@@ -1,0 +1,108 @@
+# =========================================================================
+# SocialSentry — production stack. PULLS released images from GHCR (built by
+# .github/workflows/release.yml on a v* tag); it does NOT build anything.
+#
+# Quick start (raw Docker host):
+#   cp .env.prod.example .env.prod          # fill in secrets, set VERSION
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml pull
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+#
+# EasyPanel: see docs/easypanel.md (paste this file into a Compose service and
+# put the same variables into the panel's environment field).
+#
+# All container env comes from ${VAR} interpolation, so there is no env_file to
+# ship — the same file works for raw Docker (via --env-file) and EasyPanel.
+# =========================================================================
+
+# Shared env for api + worker (DSN/Redis point at the internal services).
+x-backend-env: &backend-env
+  DATABASE_URL: postgres://${DB_USER:-socialsentry}:${DB_PASSWORD:?set DB_PASSWORD}@postgres:5432/${DB_NAME:-socialsentry}?sslmode=disable
+  REDIS_URL: redis://redis:6379
+  JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+  JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+  JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-168h}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+  META_APP_ID: ${META_APP_ID:-}
+  META_APP_SECRET: ${META_APP_SECRET:-}
+  META_WEBHOOK_APP_SECRET: ${META_WEBHOOK_APP_SECRET:-}
+  META_WEBHOOK_VERIFY_TOKEN: ${META_WEBHOOK_VERIFY_TOKEN:-}
+  META_CALLBACK_URL: ${META_CALLBACK_URL:-}
+  VK_API_VERSION: ${VK_API_VERSION:-5.199}
+  PORT: "8080"
+  ENVIRONMENT: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-socialsentry}
+      POSTGRES_USER: ${DB_USER:-socialsentry}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-socialsentry}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # One-shot: applies goose migrations, then exits. api/worker wait for it.
+  migrate:
+    image: ghcr.io/rabb1tof/socialsentry/migrate:${VERSION:-latest}
+    environment:
+      GOOSE_DBSTRING: postgres://${DB_USER:-socialsentry}:${DB_PASSWORD:?set DB_PASSWORD}@postgres:5432/${DB_NAME:-socialsentry}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: ghcr.io/rabb1tof/socialsentry/api:${VERSION:-latest}
+    environment: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    image: ghcr.io/rabb1tof/socialsentry/worker:${VERSION:-latest}
+    environment: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/rabb1tof/socialsentry/frontend:${VERSION:-latest}
+    environment:
+      # Internal hostname of the api service on the compose network.
+      API_UPSTREAM: api:8080
+    depends_on:
+      - api
+    ports:
+      # Raw Docker: browse http://<host>:8088. On EasyPanel ignore this and
+      # attach a domain to the frontend service on container port 80 instead.
+      - "${FRONTEND_PORT:-8088}:80"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

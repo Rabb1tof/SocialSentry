@@ -14,7 +14,8 @@
 | [instagram-api.md](./instagram-api.md) | Instagram: OAuth, токены, вебхуки, отправка — **всё проверено** | Работаешь с Instagram интеграцией |
 | [vk-api.md](./vk-api.md) | VK: Long Poll, события, отправка, проверка подписки | Работаешь с VK интеграцией |
 | [database.md](./database.md) | Полная схема БД, миграции, шифрование, лимиты планов | Работаешь с данными или схемой |
-| [deployment.md](./deployment.md) | Docker Compose, Dockerfile, GitHub Actions, ngrok | Настраиваешь окружение или деплой |
+| [deployment.md](./deployment.md) | Docker Compose, Dockerfile, GitHub Actions (CI + release), ngrok | Настраиваешь окружение или деплой |
+| [easypanel.md](./easypanel.md) | Деплой в прод на EasyPanel (тянет релизы из GHCR) | Разворачиваешь прод |
 | [agents.md](./agents.md) | Правила, соглашения и контекст для AI агентов | Ты AI агент или онбордишь нового разработчика |
 
 ---

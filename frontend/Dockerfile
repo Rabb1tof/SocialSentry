@@ -19,6 +19,10 @@ RUN npm run build
 
 # === Production stage ===
 FROM nginx:alpine AS production
+# API_UPSTREAM is substituted into the nginx template at container start.
+# Override it (e.g. to a project-prefixed hostname) via the environment if needed.
+ENV API_UPSTREAM=api:8080
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

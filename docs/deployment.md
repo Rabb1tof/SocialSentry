@@ -76,145 +76,39 @@ volumes:
 
 ---
 
-## Dockerfile (backend)
+## Dockerfiles
 
-```dockerfile
-# backend/Dockerfile
-FROM golang:1.22-alpine AS development
-WORKDIR /app
-RUN apk add --no-cache git
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-CMD ["go", "run", "./cmd/api"]
+The authoritative Dockerfiles live in the repo — don't copy them here, they drift.
 
-FROM golang:1.22-alpine AS builder
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /api ./cmd/api
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /worker ./cmd/worker
-
-FROM alpine:3.19 AS production
-RUN apk add --no-cache ca-certificates tzdata
-COPY --from=builder /api /worker /usr/local/bin/
-EXPOSE 8080
-```
-
----
-
-## Dockerfile (frontend)
-
-```dockerfile
-# frontend/Dockerfile
-FROM node:20-alpine AS development
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-CMD ["npm", "run", "dev", "--", "--host"]
-
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine AS production
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-```
-
-```nginx
-# frontend/nginx.conf
-server {
-    listen 80;
-    root /usr/share/nginx/html;
-    index index.html;
-
-    # SPA routing — все пути отдают index.html
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Проксирование API
-    location /api/ {
-        proxy_pass http://api:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-
-    # WebSocket
-    location /ws {
-        proxy_pass http://api:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-```
+- [`backend/Dockerfile`](../backend/Dockerfile) — multi-stage:
+  `development` (dev compose), `builder`, `production` (api, `CMD ["api"]`),
+  `production-worker` (`CMD ["worker"]`), and `migrate` (goose + migration SQL).
+  The `builder` regenerates the gitignored sqlc code (`sqlc generate`) before
+  `go build`, so images build from a clean checkout.
+- [`frontend/Dockerfile`](../frontend/Dockerfile) — `development`, `builder`,
+  `production` (nginx). The production stage serves the SPA **and** reverse-proxies
+  `/api`, `/webhooks`, `/ws` to the backend; the upstream is configurable via the
+  `API_UPSTREAM` env var, rendered into [`frontend/nginx.conf.template`](../frontend/nginx.conf.template)
+  at container start. Single-origin is required (relative `/api/v1` + SameSite=Strict
+  refresh cookie).
 
 ---
 
 ## Production Docker Compose
 
-```yaml
-# docker-compose.prod.yml
-version: '3.9'
+The production stack is [`docker-compose.prod.yml`](../docker-compose.prod.yml) — it
+**pulls** the released images from GHCR (`ghcr.io/rabb1tof/socialsentry/{api,worker,
+migrate,frontend}`) instead of building. Services: `postgres`, `redis`, one-shot
+`migrate` (goose up), `api`, `worker`, `frontend`. Config comes from `${VAR}`
+interpolation — see [`.env.prod.example`](../.env.prod.example).
 
-services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    command: redis-server --requirepass ${REDIS_PASSWORD}
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-
-  # Image paths match what release.yml pushes: ghcr.io/rabb1tof/<repo>/<name>.
-  # Replace rabb1tof with your GitHub org/user; VERSION is the tag without the `v`.
-  api:
-    image: ghcr.io/rabb1tof/socialsentry/api:${VERSION}
-    depends_on: [postgres, redis]
-    environment:
-      DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-    env_file: .env.prod
-    restart: unless-stopped
-    deploy:
-      replicas: 2
-
-  worker:
-    image: ghcr.io/rabb1tof/socialsentry/worker:${VERSION}
-    depends_on: [postgres, redis]
-    env_file: .env.prod
-    restart: unless-stopped
-
-  frontend:
-    image: ghcr.io/rabb1tof/socialsentry/frontend:${VERSION}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./certs:/etc/nginx/certs:ro
-    restart: unless-stopped
-
-volumes:
-  postgres_data:
-  redis_data:
+```bash
+cp .env.prod.example .env.prod      # fill secrets, set VERSION (tag without the v)
+docker compose --env-file .env.prod -f docker-compose.prod.yml pull
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
 ```
+
+**Deploying on EasyPanel → see the step-by-step guide: [`easypanel.md`](./easypanel.md).**
 
 ---
 
@@ -224,10 +118,12 @@ Two workflows live in `.github/workflows/`:
 
 ### `ci.yml` — on every push / PR to `main`
 
-- **backend** job: gofmt check, `go vet`, goose migrations against a Postgres
-  service, `go test -race`, builds both binaries, then `golangci-lint`.
-  Postgres 16 + Redis 7 run as service containers; integration tests opt in via
-  `TEST_DATABASE_URL` / `TEST_REDIS_URL`.
+- **backend** job: regenerates the gitignored sqlc code (`sqlc generate`), then
+  gofmt check, `go vet`, goose migrations against a Postgres service, `go test
+  -race`, builds both binaries, then `golangci-lint`. Postgres 16 + Redis 7 run as
+  service containers; integration tests opt in via `TEST_DATABASE_URL` /
+  `TEST_REDIS_URL`. (`internal/db/generated` is not committed — CI and the Docker
+  builder both run `sqlc generate@v1.31.1`.)
 - **frontend** job: `npm ci` + `npm run build` (`tsc --noEmit` + `vite build`) on Node 20.
 
 This is the gate — it does **not** build or push images.
