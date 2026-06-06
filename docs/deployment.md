@@ -183,8 +183,10 @@ services:
       - redis_data:/data
     restart: unless-stopped
 
+  # Image paths match what release.yml pushes: ghcr.io/<owner>/<repo>/<name>.
+  # Replace OWNER with your GitHub org/user; VERSION is the tag without the `v`.
   api:
-    image: ghcr.io/yourorg/socialsentry-api:${VERSION}
+    image: ghcr.io/OWNER/socialsentry/api:${VERSION}
     depends_on: [postgres, redis]
     environment:
       DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
@@ -195,13 +197,13 @@ services:
       replicas: 2
 
   worker:
-    image: ghcr.io/yourorg/socialsentry-worker:${VERSION}
+    image: ghcr.io/OWNER/socialsentry/worker:${VERSION}
     depends_on: [postgres, redis]
     env_file: .env.prod
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/yourorg/socialsentry-frontend:${VERSION}
+    image: ghcr.io/OWNER/socialsentry/frontend:${VERSION}
     ports:
       - "80:80"
       - "443:443"
@@ -218,74 +220,55 @@ volumes:
 
 ## GitHub Actions CI/CD
 
-```yaml
-# .github/workflows/deploy.yml
-name: Build and Deploy
+Two workflows live in `.github/workflows/`:
 
-on:
-  push:
-    branches: [main]
+### `ci.yml` — on every push / PR to `main`
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: { go-version: '1.22' }
-      - name: Run tests
-        run: cd backend && go test ./...
+- **backend** job: gofmt check, `go vet`, goose migrations against a Postgres
+  service, `go test -race`, builds both binaries, then `golangci-lint`.
+  Postgres 16 + Redis 7 run as service containers; integration tests opt in via
+  `TEST_DATABASE_URL` / `TEST_REDIS_URL`.
+- **frontend** job: `npm ci` + `npm run build` (`tsc --noEmit` + `vite build`) on Node 20.
 
-  build:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push API
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          target: production
-          push: true
-          tags: ghcr.io/${{ github.repository }}/api:${{ github.sha }}
-      - name: Build and push Frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          target: production
-          push: true
-          tags: ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
+This is the gate — it does **not** build or push images.
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            cd /opt/socialsentry
-            VERSION=${{ github.sha }} docker compose -f docker-compose.prod.yml pull
-            VERSION=${{ github.sha }} docker compose -f docker-compose.prod.yml up -d
-            docker system prune -f
+### `release.yml` — on pushing a version tag (`v*.*.*`)
+
+Cutting a release is a one-liner:
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0     # triggers the workflow
 ```
+
+What it does:
+
+1. **images** (matrix: `api`, `worker`, `frontend`) — builds the `production`
+   stages and pushes to **GHCR** via `docker/build-push-action`. Tags are derived
+   from the git tag by `docker/metadata-action`:
+   - `1.2.0` (full version, `v` stripped)
+   - `1.2` (major.minor)
+   - `latest` (only for stable tags; `latest=auto` skips pre-releases)
+
+   The image name is lowercased automatically. `api` is built from the
+   `production` target, `worker` from `production-worker` (same image, different
+   default command — see the backend Dockerfile).
+
+2. **release** — after all images push, `softprops/action-gh-release` creates a
+   GitHub Release named after the tag, with auto-generated notes
+   (`generate_release_notes: true`) plus the `docker pull` commands for the three
+   images. Tags containing `-` (e.g. `v1.2.0-rc.1`) are marked as pre-releases.
+
+Auth uses the built-in `GITHUB_TOKEN` (workflow grants `contents: write` +
+`packages: write`) — **no extra secrets required**. The published packages inherit
+the repo's visibility; flip them to public under *Packages → Package settings* if
+you want anonymous pulls.
+
+> **Auto-deploy is intentionally not wired.** Promotion to a server (e.g. an
+> `appleboy/ssh-action` step running `docker compose -f docker-compose.prod.yml
+> pull && up -d`, or a `workflow_dispatch` deploy job) is left out until a deploy
+> target + `docker-compose.prod.yml` exist on the host. The published GHCR images
+> are ready to `docker pull` by version.
 
 ---
 

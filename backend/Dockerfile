@@ -26,8 +26,16 @@ RUN go mod tidy && \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /api ./cmd/api && \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /worker ./cmd/worker
 
-# === Production stage ===
+# === Production stage: API (default command) ===
+# Both binaries live in the image; the default command runs the HTTP API.
 FROM alpine:3.19 AS production
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=builder /api /worker /usr/local/bin/
 EXPOSE 8080
+CMD ["api"]
+
+# === Production stage: worker ===
+# Same image as `production`, but the bot engine is the default command.
+# Built as a separate target so api/worker ship as distinct runnable images.
+FROM production AS production-worker
+CMD ["worker"]
