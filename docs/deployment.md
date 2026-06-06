@@ -183,10 +183,10 @@ services:
       - redis_data:/data
     restart: unless-stopped
 
-  # Image paths match what release.yml pushes: ghcr.io/<owner>/<repo>/<name>.
-  # Replace OWNER with your GitHub org/user; VERSION is the tag without the `v`.
+  # Image paths match what release.yml pushes: ghcr.io/rabb1tof/<repo>/<name>.
+  # Replace rabb1tof with your GitHub org/user; VERSION is the tag without the `v`.
   api:
-    image: ghcr.io/OWNER/socialsentry/api:${VERSION}
+    image: ghcr.io/rabb1tof/socialsentry/api:${VERSION}
     depends_on: [postgres, redis]
     environment:
       DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
@@ -197,13 +197,13 @@ services:
       replicas: 2
 
   worker:
-    image: ghcr.io/OWNER/socialsentry/worker:${VERSION}
+    image: ghcr.io/rabb1tof/socialsentry/worker:${VERSION}
     depends_on: [postgres, redis]
     env_file: .env.prod
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/OWNER/socialsentry/frontend:${VERSION}
+    image: ghcr.io/rabb1tof/socialsentry/frontend:${VERSION}
     ports:
       - "80:80"
       - "443:443"
