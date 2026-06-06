@@ -1,0 +1,107 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-socialsentry}
+      POSTGRES_USER: ${DB_USER:-socialsentry}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U socialsentry"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # One-shot migration runner. Applies all pending goose migrations against
+  # the postgres service, then exits. api + worker wait for it via
+  # service_completed_successfully so they never start against an empty schema.
+  migrate:
+    build:
+      context: ./backend
+      target: development
+    command: >-
+      goose -dir internal/db/migrations
+      postgres "postgres://socialsentry:secret@postgres:5432/socialsentry?sslmode=disable"
+      up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ./backend
+      target: development
+    command: go run ./cmd/api
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      target: development
+    command: go run ./cmd/worker
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      target: development
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_API_URL: http://api:8080
+      # Windows/Docker bind mounts don't deliver inotify events — poll so Vite HMR sees edits.
+      VITE_USE_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    restart: unless-stopped
+
+  # Asynq queue monitor UI (standalone official image). Browse queues/tasks at
+  # http://localhost:${ASYNQ_MONITOR_PORT:-8081}. Serves on :8080 inside the container.
+  asynqmon:
+    image: hibiken/asynqmon:latest
+    command: ["--redis-addr=redis:6379"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "${ASYNQ_MONITOR_PORT:-8081}:8080"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

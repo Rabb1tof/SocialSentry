@@ -1,0 +1,268 @@
+/* ── Self-hosted variable fonts (no third-party / Google Fonts requests) ──────
+   One variable file per subset covers all weights, split latin/cyrillic by
+   unicode-range so only the needed subset is fetched. font-display: swap. */
+@font-face {
+  font-family: "Golos Text";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 900;
+  src: url("/fonts/golos-text-cyrillic.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: "Golos Text";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 900;
+  src: url("/fonts/golos-text-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 800;
+  src: url("/fonts/jetbrains-mono-cyrillic.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 800;
+  src: url("/fonts/jetbrains-mono-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* — Светлая тема — */
+    --background: 220 40% 98%;      /* #F6F8FC */
+    --foreground: 222 52% 10%;      /* #0C1426 — near-navy black */
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 52% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 52% 10%;
+
+    --primary: 223 100% 59%;        /* #2D6BFF azure */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 40% 96%;
+    --secondary-foreground: 222 47% 16%;
+
+    --muted: 220 40% 96%;
+    --muted-foreground: 221 15% 60%;/* #8A93A8 */
+
+    --accent: 265 96% 62%;          /* #8B3DFC violet */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 351 85% 61%;     /* #F1455E */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 218 37% 93%;          /* #E5EAF3 */
+    --input: 218 37% 93%;
+    --ring: 223 100% 59%;           /* azure focus ring */
+
+    --radius: 0.75rem;              /* премиальнее стоковых 0.5rem */
+
+    /* Браузерные поверхности (overscroll-фон, скроллбары, нативные контролы)
+       следуют теме — иначе на мобилке в тёмной теме видны белые полосы. */
+    color-scheme: light;
+  }
+
+  .dark {
+    /* — Тёмная тема (основная, «командный центр») — */
+    --background: 224 47% 8%;       /* #0B101E */
+    --foreground: 222 60% 97%;      /* #F3F6FD */
+
+    --card: 225 39% 12%;            /* #121829 */
+    --card-foreground: 222 60% 97%;
+    --popover: 225 39% 12%;
+    --popover-foreground: 222 60% 97%;
+
+    --primary: 223 100% 63%;        /* azure, чуть ярче на тёмном */
+    --primary-foreground: 224 47% 8%;
+
+    --secondary: 224 33% 18%;
+    --secondary-foreground: 222 40% 92%;
+
+    --muted: 224 30% 16%;
+    --muted-foreground: 221 13% 56%;/* #6E788F */
+
+    --accent: 265 96% 66%;          /* violet */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 351 80% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 31% 20%;          /* #232C42 */
+    --input: 222 31% 22%;
+    --ring: 223 100% 63%;
+
+    color-scheme: dark;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  /* Фон и на html, и на body — чтобы overscroll и safe-area тоже были в цвете темы. */
+  html {
+    @apply bg-background;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+/* Доп. бренд-токены (из kit.css): акценты, платформы, свечение. Значения для
+   светлой и тёмной темы. Семантика (background/card/primary/…) уже задана выше. */
+@layer base {
+  :root {
+    --azure: 223 100% 59%;     /* #2D6BFF */
+    --azure-600: 224 80% 51%;  /* #1E54E6 */
+    --cyan: 194 100% 55%;      /* #19C8FF */
+    --violet: 265 96% 62%;     /* #8B3DFC — admin/platform accent only */
+    --vk: 212 100% 50%;        /* #0077FF */
+    --success: 159 78% 42%;    /* #18C08A */
+    --warning: 37 91% 55%;     /* #F5A524 */
+    --warning-foreground: 28 45% 12%;  /* dark text on amber (WCAG AA) */
+  }
+
+  .dark {
+    --azure: 223 100% 63%;
+    --azure-600: 223 100% 59%;
+    --cyan: 194 100% 60%;
+    --violet: 265 96% 66%;
+    --vk: 212 100% 55%;
+    --success: 159 72% 45%;
+    --warning: 37 91% 58%;
+    --warning-foreground: 28 45% 12%;  /* dark text on amber (WCAG AA) */
+  }
+}
+
+/* Фирменная заливка (активный рельс навигации, акцентные чипы). Раньше была
+   сине-фиолетово-малиновым градиентом — сведена к одному фирменному тону azure. */
+.ss-grad {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+/* Единственный фирменный «штрих» — лёгкий azure на «Sentry» в логотипе. */
+.ss-grad-text {
+  color: hsl(var(--primary));
+}
+.ss-live {
+  color: hsl(var(--cyan)); /* «онлайн / следит» статус */
+}
+
+/* Технический текст: моноширинный + «нулевой» глиф у JetBrains Mono + tabular. */
+.mono {
+  font-family: theme("fontFamily.mono");
+  font-feature-settings: "zero" 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Motion ──────────────────────────────────────────────────────────────────
+   Сдержанная микро-моторика. Все классы — opt-in и полностью отключаются при
+   prefers-reduced-motion. Анимируем только transform/opacity (GPU-friendly). */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes ss-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes ss-fade-in-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes ss-pop-in {
+    from { opacity: 0; transform: scale(0.96) translateY(6px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  @keyframes ss-shimmer {
+    100% { transform: translateX(100%); }
+  }
+
+  .animate-fade-in {
+    animation: ss-fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-fade-in-up {
+    animation: ss-fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  /* Модалки: лёгкое появление (scale + fade). */
+  .animate-pop-in {
+    animation: ss-pop-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Каскад появления: дети контейнера .stagger проявляются по очереди. */
+  .stagger > * {
+    animation: ss-fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 55ms; }
+  .stagger > *:nth-child(3) { animation-delay: 110ms; }
+  .stagger > *:nth-child(4) { animation-delay: 165ms; }
+  .stagger > *:nth-child(5) { animation-delay: 220ms; }
+  .stagger > *:nth-child(6) { animation-delay: 275ms; }
+  .stagger > *:nth-child(n + 7) { animation-delay: 330ms; }
+
+  /* Reveal-on-scroll: скрыто, пока useReveal не добавит .is-visible. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(12px);
+    transition:
+      opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .reveal.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Шиммер для скелетонов (вместо дефолтного pulse). */
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .skeleton-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--foreground) / 0.07),
+      transparent
+    );
+    animation: ss-shimmer 1.6s infinite;
+  }
+}
+
+/* При reduce — никаких reveal-«ловушек»: контент сразу виден. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* iOS Safari автоматически приближает страницу при фокусе на поле с размером
+   шрифта < 16px и обратно НЕ отъезжает. Заставляем формы быть >= 16px на узких
+   экранах — это убирает нежелательный зум. На десктопе размеры задаёт дизайн. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-flight runs on the same branch when a new push lands.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: ['1.25']
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: socialsentry
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: socialsentry
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U socialsentry"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://socialsentry:secret@localhost:5432/socialsentry?sslmode=disable
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-jwt-secret-32-bytes-hex-padding-padding
+      ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      META_APP_ID: ci-app
+      META_APP_SECRET: ci-app-secret
+      META_WEBHOOK_VERIFY_TOKEN: ci-verify
+      VK_API_VERSION: '5.199'
+      PORT: '8080'
+      ENVIRONMENT: development
+      LOG_LEVEL: info
+      # Integration tests look for these to opt in to testcontainers.
+      TEST_DATABASE_URL: postgres://socialsentry:secret@localhost:5432/socialsentry?sslmode=disable
+      TEST_REDIS_URL: redis://localhost:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: gofmt check
+        run: |
+          DIFF=$(gofmt -l backend/)
+          if [ -n "$DIFF" ]; then
+            echo "Unformatted files:"
+            echo "$DIFF"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go -C backend vet ./...
+
+      - name: Apply migrations
+        run: |
+          go run github.com/pressly/goose/v3/cmd/goose@latest \
+            -dir backend/internal/db/migrations \
+            postgres "$DATABASE_URL" up
+
+      - name: go test (-race)
+        run: go -C backend test ./... -count=1 -race -timeout=5m
+
+      - name: Build binaries
+        run: |
+          go -C backend build -o /tmp/api ./cmd/api
+          go -C backend build -o /tmp/worker ./cmd/worker
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: backend
+          args: --timeout=5m
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Build (tsc --noEmit + vite build)
+        working-directory: frontend
+        run: npm run build
